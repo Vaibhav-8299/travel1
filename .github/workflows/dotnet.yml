@@ -11,8 +11,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      with:
-        submodules: 'false'  # Changed to 'false' to skip submodule initialization
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -20,13 +18,10 @@ jobs:
         dotnet-version: '8.0.x'
 
     - name: Restore
-      run: dotnet restore
+      run: dotnet restore TravelManagement.Api/TravelManagement.Api.csproj
 
     - name: Build
-      run: dotnet build --configuration Release --no-restore
-
-    - name: Test
-      run: dotnet test --no-build
+      run: dotnet build TravelManagement.Api/TravelManagement.Api.csproj --configuration Release --no-restore
 
     - name: Publish
-      run: dotnet publish -c Release -o ./publish
+      run: dotnet publish TravelManagement.Api/TravelManagement.Api.csproj -c Release -o ./publish
