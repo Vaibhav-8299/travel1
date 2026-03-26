@@ -1,0 +1,166 @@
+name: CI/CD Pipeline — Travel Management
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  NODE_VERSION: '20.x'
+  AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}        # Set in GitHub Secrets
+  AZURE_WEBAPP_PACKAGE_PATH: './TravelManagement.Api'
+  AZURE_STATICWEBAPP_NAME: ${{ secrets.AZURE_STATICWEBAPP_NAME }}  # Set in GitHub Secrets
+
+jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1: Build & Test Backend (.NET 8)
+  # ─────────────────────────────────────────────
+  build-backend:
+    name: 🔨 Build & Test Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: 📦 Restore dependencies
+        run: dotnet restore TravelManagement.Api/TravelManagement.Api.csproj
+
+      - name: 🔨 Build
+        run: dotnet build TravelManagement.Api/TravelManagement.Api.csproj --no-restore --configuration Release
+
+      - name: 🚀 Publish
+        run: |
+          dotnet publish TravelManagement.Api/TravelManagement.Api.csproj \
+            --no-build \
+            --configuration Release \
+            --output ./publish/api
+
+      - name: 📤 Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-publish
+          path: ./publish/api
+
+  # ─────────────────────────────────────────────
+  # JOB 2: Build Frontend (Angular 21)
+  # ─────────────────────────────────────────────
+  build-frontend:
+    name: 🌐 Build Frontend (Angular)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: TravelManagement.Client/package-lock.json
+
+      - name: 📦 Install dependencies
+        run: npm ci
+        working-directory: TravelManagement.Client
+
+      - name: 🏗️ Build Angular app (production)
+        run: npm run build -- --configuration production
+        working-directory: TravelManagement.Client
+
+      - name: 📤 Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: TravelManagement.Client/dist/
+
+  # ─────────────────────────────────────────────
+  # JOB 3: Deploy Backend to Azure App Service
+  # (only on push to main)
+  # ─────────────────────────────────────────────
+  deploy-backend:
+    name: 🚀 Deploy Backend → Azure App Service
+    runs-on: ubuntu-latest
+    needs: build-backend
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+
+    steps:
+      - name: ⬇️ Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-publish
+          path: ./publish/api
+
+      - name: 🔐 Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: 🌍 Deploy to Azure App Service
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: ./publish/api
+
+      - name: ⚙️ Set Azure App Settings (env vars)
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          app-settings-json: |
+            [
+              { "name": "ConnectionStrings__DefaultConnection", "value": "${{ secrets.DB_CONNECTION_STRING }}", "slotSetting": false },
+              { "name": "Jwt__Key",  "value": "${{ secrets.JWT_KEY }}", "slotSetting": false },
+              { "name": "Jwt__Issuer", "value": "TravelManagementApi", "slotSetting": false },
+              { "name": "Jwt__Audience", "value": "TravelManagementUsers", "slotSetting": false },
+              { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production", "slotSetting": false }
+            ]
+
+  # ─────────────────────────────────────────────
+  # JOB 4: Deploy Frontend to Azure Static Web Apps
+  # (only on push to main)
+  # ─────────────────────────────────────────────
+  deploy-frontend:
+    name: 🌐 Deploy Frontend → Azure Static Web Apps
+    runs-on: ubuntu-latest
+    needs: build-frontend
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: TravelManagement.Client/package-lock.json
+
+      - name: 📦 Install dependencies
+        run: npm ci
+        working-directory: TravelManagement.Client
+
+      - name: 🏗️ Build Angular app (production)
+        run: npm run build -- --configuration production
+        working-directory: TravelManagement.Client
+
+      - name: 🚀 Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "TravelManagement.Client"
+          output_location: "dist/travel-management.client/browser"
+          skip_api_build: true

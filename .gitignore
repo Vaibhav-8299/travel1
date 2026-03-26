@@ -1,8 +1,31 @@
+# Visual Studio / .NET
 .vs/
 bin/
 obj/
-node_modules/
 *.user
 *.suo
 *.log
-appsettings.json
+
+# ASP.NET Core secrets - DO NOT COMMIT REAL SECRETS
+# appsettings.json is committed but use environment variables/secrets in production
+# appsettings.Development.json is fine to commit (no secrets)
+
+# Node / Angular
+node_modules/
+dist/
+.angular/cache/
+
+# Build artifacts
+*.txt.bak
+build_errors_utf8.txt
+build_output*.txt
+backend_log.txt
+startup_err.txt
+
+# Environment files
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,17 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "DefaultConnection": "server=YOUR_DB_HOST;database=TravelManagement;user=YOUR_DB_USER;password=YOUR_DB_PASSWORD;SslMode=Required;"
+  },
+  "Jwt": {
+    "Key": "YOUR_JWT_SECRET_KEY_AT_LEAST_32_CHARS",
+    "Issuer": "TravelManagementApi",
+    "Audience": "TravelManagementUsers"
+  }
+}
